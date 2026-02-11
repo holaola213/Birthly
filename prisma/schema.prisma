@@ -1,0 +1,92 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+model User {
+  id           String   @id @default(cuid())
+  username     String   @unique
+  passwordHash String
+  name         String
+  birthday     String   // "MM-DD" format
+  birthdayYear Int?
+  phone        String   @unique // E.164 format
+  discordId    String?  @unique // future: Discord OAuth
+  discordName  String?
+  email        String?  @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  members       Member[]
+  createdGroups Group[]  @relation("GroupCreator")
+}
+
+model Group {
+  id        String   @id @default(cuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  createdBy   User?   @relation("GroupCreator", fields: [createdById], references: [id])
+  createdById String?
+
+  members        Member[]
+  inviteLinks    InviteLink[]
+  reminderConfig ReminderConfig?
+}
+
+model Member {
+  id           String   @id @default(cuid())
+  name         String
+  birthday     String   // stored as "MM-DD" (month-day only)
+  birthdayYear Int?     // optional: some people don't share birth year
+  phone        String   // E.164 format, e.g., "+15551234567"
+  isCreator    Boolean  @default(false)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+
+  userId String?
+  user   User?   @relation(fields: [userId], references: [id])
+
+  @@unique([phone, groupId])
+}
+
+model InviteLink {
+  id        String    @id @default(cuid())
+  token     String    @unique @default(cuid())
+  expiresAt DateTime?
+  maxUses   Int?
+  useCount  Int       @default(0)
+  createdAt DateTime  @default(now())
+
+  groupId String
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+}
+
+model ReminderConfig {
+  id           String @id @default(cuid())
+  reminderDays String @default("[7, 1]") // JSON array of days-before
+  reminderTime String @default("09:00")  // HH:mm 24hr format
+  timezone     String @default("America/New_York")
+
+  groupId String @unique
+  group   Group  @relation(fields: [groupId], references: [id], onDelete: Cascade)
+}
+
+model SentReminder {
+  id             String   @id @default(cuid())
+  memberId       String   // the birthday person
+  recipientPhone String   // who received the SMS
+  daysBefore     Int      // 7 or 1 (or custom)
+  year           Int      // which year's birthday this was for
+  sentAt         DateTime @default(now())
+
+  @@unique([memberId, recipientPhone, daysBefore, year])
+}
